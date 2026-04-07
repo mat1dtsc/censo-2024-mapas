@@ -1,105 +1,29 @@
-# app.py - Censo 2024 por manzana (Python/Streamlit)
-# Replica de https://bastianoleah.shinyapps.io/censo_2024_mapas/
+# app.py - Proyecciones de Poblacion Chile (Censo 2024)
+# Dashboard de estimacion de demanda poblacional por region y comuna
 
 import streamlit as st
-import duckdb
-import geopandas as gpd
+import pandas as pd
 import plotly.express as px
-import random
-import os
+import plotly.graph_objects as go
 
-# -- Constantes --------------------------------------------------------------
+# -- URLs de datos (GitHub, repo de Bastian Olea) ----------------------------
 
-PARQUET = "Cartografia_censo2024_Pais_Manzanas.parquet"
-
-REGIONES = [
-    "Tarapaca", "Antofagasta", "Atacama", "Coquimbo", "Valparaiso",
-    "Libertador General Bernardo O'Higgins", "Maule", "Biobio",
-    "La Araucania", "Los Lagos", "Aysen del General Carlos Ibanez del Campo",
-    "Magallanes y de la Antartica Chilena", "Metropolitana de Santiago",
-    "Los Rios", "Arica y Parinacota", "Nuble"
-]
-
-VARIABLES = [
-    "n_per", "n_hombres", "n_mujeres",
-    "n_edad_0_5", "n_edad_6_13", "n_edad_14_17", "n_edad_18_24",
-    "n_edad_25_44", "n_edad_45_59", "n_edad_60_mas", "prom_edad",
-    "n_inmigrantes", "n_nacionalidad", "n_pueblos_orig", "n_afrodescendencia",
-    "n_lengua_indigena", "n_religion",
-    "n_dificultad_ver", "n_dificultad_oir", "n_dificultad_mover",
-    "n_dificultad_cogni", "n_dificultad_cuidado", "n_dificultad_comunic",
-    "n_discapacidad",
-    "n_estcivcon_casado", "n_estcivcon_conviviente", "n_estcivcon_conv_civil",
-    "n_estcivcon_anul_sep_div", "n_estcivcon_viudo", "n_estcivcon_soltero",
-    "prom_escolaridad18",
-    "n_asistencia_parv", "n_asistencia_basica", "n_asistencia_media",
-    "n_asistencia_superior",
-    "n_cine_nunca_curso_primera_infancia", "n_cine_primaria",
-    "n_cine_secundaria", "n_cine_terciaria_maestria_doctorado",
-    "n_cine_especial_diferencial",
-    "n_analfabet",
-    "n_ocupado", "n_desocupado", "n_fuera_fuerza_trabajo",
-    "n_cise_rec_independientes", "n_cise_rec_dependientes",
-    "n_cise_rec_trabajador_no_remunerado",
-    "n_ciuo_1", "n_ciuo_2", "n_ciuo_3", "n_ciuo_4", "n_ciuo_5",
-    "n_ciuo_6", "n_ciuo_7", "n_ciuo_8", "n_ciuo_9", "n_ciuo_0",
-    "n_caenes_A", "n_caenes_B", "n_caenes_C", "n_caenes_D", "n_caenes_E",
-    "n_caenes_F", "n_caenes_G", "n_caenes_H", "n_caenes_I", "n_caenes_J",
-    "n_caenes_K", "n_caenes_L", "n_caenes_M", "n_caenes_N", "n_caenes_O",
-    "n_caenes_P", "n_caenes_Q", "n_caenes_R", "n_caenes_S", "n_caenes_T",
-    "n_caenes_U",
-    "n_transporte_auto", "n_transporte_publico", "n_transporte_camina",
-    "n_transporte_bicicleta", "n_transporte_motocicleta",
-    "n_transporte_cab_lan_bote", "n_transporte_otros",
-    "n_hog", "prom_per_hog", "n_hog_unipersonales", "n_hog_60",
-    "n_hog_menores", "n_jefatura_mujer",
-    "n_tenencia_propia_pagada", "n_tenencia_propia_pagandose",
-    "n_tenencia_arrendada_contrato", "n_tenencia_arrendada_sin_contrato",
-    "n_tenencia_cedida_trabajo", "n_tenencia_cedida_familiar", "n_tenencia_otro",
-    "n_comb_cocina_gas", "n_comb_cocina_parafina", "n_comb_cocina_lena",
-    "n_comb_cocina_pellet", "n_comb_cocina_carbon", "n_comb_cocina_electricidad",
-    "n_comb_cocina_solar", "n_comb_cocina_no_utiliza",
-    "n_comb_calefaccion_gas", "n_comb_calefaccion_parafina",
-    "n_comb_calefaccion_lena", "n_comb_calefaccion_pellet",
-    "n_comb_calefaccion_carbon", "n_comb_calefaccion_electricidad",
-    "n_comb_calefaccion_otra", "n_comb_calefaccion_no_utiliza",
-    "n_serv_tel_movil", "n_serv_compu", "n_serv_tablet",
-    "n_serv_internet_fija", "n_serv_internet_movil", "n_serv_internet_satelital",
-    "n_internet",
-    "n_vp", "n_vp_ocupada", "n_vp_desocupada",
-    "n_tipo_viv_casa", "n_tipo_viv_depto", "n_tipo_viv_indigena",
-    "n_tipo_viv_pieza", "n_tipo_viv_mediagua", "n_tipo_viv_movil",
-    "n_tipo_viv_otro",
-    "n_dormitorios_1", "n_dormitorios_2", "n_dormitorios_3",
-    "n_dormitorios_4", "n_dormitorios_5", "n_dormitorios_6_o_mas",
-    "n_viv_hacinadas", "n_viv_irrecuperables",
-    "n_hog_allegados", "n_nucleos_hacinados_allegados", "n_viv_no_ampliables",
-    "n_deficit_cuantitativo",
-    "n_mat_paredes_hormigon", "n_mat_paredes_albanileria",
-    "n_mat_paredes_tabique_forrado", "n_mat_paredes_tabique_sin_forro",
-    "n_mat_paredes_artesanal", "n_mat_paredes_precarios",
-    "n_mat_techo_tejas", "n_mat_techo_hormigon", "n_mat_techo_zinc",
-    "n_mat_techo_fibrocemento", "n_mat_techo_fonolita", "n_mat_techo_paja",
-    "n_mat_techo_precarios", "n_mat_techo_sin_cubierta",
-    "n_mat_piso_radier_con_revestimiento", "n_mat_piso_radier_sin_revestimiento",
-    "n_mat_piso_baldosa_cemento", "n_mat_piso_capa_cemento", "n_mat_piso_tierra",
-    "n_fuente_agua_publica", "n_fuente_agua_pozo", "n_fuente_agua_camion",
-    "n_fuente_agua_rio",
-    "n_distrib_agua_llave", "n_distrib_agua_llave_fuera", "n_distrib_agua_acarreo",
-    "n_serv_hig_alc_dentro", "n_serv_hig_alc_fuera", "n_serv_hig_fosa",
-    "n_serv_hig_pozo", "n_serv_hig_acequia_canal", "n_serv_hig_cajon_otro",
-    "n_serv_hig_bano_quimico", "n_serv_hig_bano_seco", "n_serv_hig_no_tiene",
-    "n_fuente_elect_publica", "n_fuente_elect_diesel", "n_fuente_elect_solar",
-    "n_fuente_elect_eolica", "n_fuente_elect_otro", "n_fuente_elect_no_tiene",
-    "n_basura_servicios", "n_basura_entierra", "n_basura_eriazo",
-    "n_basura_rio", "n_basura_otro",
-]
+URL_PROYECCIONES = (
+    "https://raw.githubusercontent.com/bastianolea/"
+    "censo_proyecciones_poblacion/main/datos/datos_procesados/"
+    "censo_proyecciones_a%C3%B1o.csv"
+)
+URL_PIRAMIDE = (
+    "https://raw.githubusercontent.com/bastianolea/"
+    "censo_proyecciones_poblacion/main/datos/datos_procesados/"
+    "censo_proyecciones_a%C3%B1o_edad_genero.parquet"
+)
 
 # -- Configuracion de pagina -------------------------------------------------
 
 st.set_page_config(
-    page_title="Censo 2024 por manzana",
-    page_icon="\U0001f5fa\ufe0f",
+    page_title="Proyecciones de Poblacion Chile",
+    page_icon="\U0001f4ca",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -111,126 +35,328 @@ st.markdown(
         [data-testid="stSidebar"] { background-color: #1a1a1a; }
         h1 { color: #cc44aa !important; }
         h2, h3 { color: #e0e0e0; }
+        .stMetric label { color: #aaaaaa !important; }
+        .stMetric [data-testid="stMetricValue"] { color: #e0e0e0 !important; }
+        .stMetric [data-testid="stMetricDelta"] { font-size: 0.9rem !important; }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-# -- Verificar datos ----------------------------------------------------------
-
-if not os.path.exists(PARQUET):
-    st.error(
-        f"**Archivo de datos no encontrado:** `{PARQUET}`\n\n"
-        "Descarga el archivo desde el repositorio de Bastian Olea:\n\n"
-        "https://github.com/bastianolea/censo_2024_mapas\n\n"
-        "Colocalo en la misma carpeta que `app.py` y vuelve a ejecutar la app."
-    )
-    st.stop()
-
-# -- Conexion DuckDB ----------------------------------------------------------
+# -- Carga de datos -----------------------------------------------------------
 
 
-@st.cache_resource
-def get_connection():
-    return duckdb.connect()
+@st.cache_data(ttl=3600)
+def cargar_proyecciones():
+    df = pd.read_csv(URL_PROYECCIONES, sep=";", index_col=0)
+    df.columns = [
+        "cut_region", "region", "cut_provincia", "provincia",
+        "cut_comuna", "comuna", "año", "poblacion",
+    ]
+    return df
 
 
-con = get_connection()
-
-# -- Funciones de datos -------------------------------------------------------
-
-
-@st.cache_data
-def get_comunas(region_nombre):
-    return (
-        con.execute(
-            f"SELECT DISTINCT NOM_COMUNA FROM '{PARQUET}' "
-            "WHERE NOM_REGION = ? ORDER BY NOM_COMUNA",
-            [region_nombre],
-        )
-        .fetchdf()["NOM_COMUNA"]
-        .tolist()
-    )
+@st.cache_data(ttl=3600)
+def cargar_piramide():
+    df = pd.read_parquet(URL_PIRAMIDE)
+    return df
 
 
-@st.cache_data
-def cargar_manzanas(region_nombre, comuna_nombre, var):
-    # var comes from VARIABLES list (hardcoded), safe to interpolate
-    df = con.execute(
-        f'SELECT "{var}", SHAPE FROM \'{PARQUET}\' '
-        "WHERE NOM_REGION = ? AND NOM_COMUNA = ?",
-        [region_nombre, comuna_nombre],
-    ).fetchdf()
-    gdf = gpd.GeoDataFrame(
-        df,
-        geometry=gpd.GeoSeries.from_wkb(df["SHAPE"]),
-        crs=4326,
-    )
-    return gdf
-
+with st.spinner("Descargando datos de proyecciones del INE..."):
+    df = cargar_proyecciones()
 
 # -- Sidebar ------------------------------------------------------------------
 
 with st.sidebar:
-    st.title("Censo 2024\npor manzana")
+    st.title("Proyecciones\nde Poblacion")
     st.markdown(
-        "Visualizacion de datos del Censo 2024 a nivel de manzana censal.\n\n"
-        "Selecciona una region y comuna, y elige una variable para obtener el mapa."
+        "Estimaciones y proyecciones de poblacion 2002-2035 "
+        "por region y comuna de Chile.\n\n"
+        "Fuente: [INE Chile](https://www.ine.gob.cl/estadisticas/sociales/"
+        "demografia-y-vitales/proyecciones-de-poblacion)"
     )
 
-    region = st.selectbox("Region", REGIONES, index=12)
-    comunas = get_comunas(region)
+    regiones = sorted(df["region"].unique())
+    regiones_sel = st.multiselect(
+        "Regiones",
+        regiones,
+        default=["Metropolitana de Santiago"],
+    )
 
+    if regiones_sel:
+        comunas_disponibles = sorted(
+            df[df["region"].isin(regiones_sel)]["comuna"].unique()
+        )
+    else:
+        comunas_disponibles = sorted(df["comuna"].unique())
+
+    comunas_sel = st.multiselect(
+        "Comunas (opcional, para detalle)",
+        comunas_disponibles,
+    )
+
+    st.divider()
+
+    años = sorted(df["año"].unique())
     col1, col2 = st.columns(2)
-    comuna_aleatoria = col1.button("Comuna aleatoria")
-    variable_aleatoria = col2.button("Variable aleatoria")
+    año_base = col1.selectbox("Año base", años, index=años.index(2024))
+    año_comp = col2.selectbox("Año comparar", años, index=años.index(2035))
 
-    if "comuna_idx" not in st.session_state:
-        st.session_state.comuna_idx = 0
-    if "variable_idx" not in st.session_state:
-        st.session_state.variable_idx = 0
+# -- Filtros ------------------------------------------------------------------
 
-    if comuna_aleatoria:
-        st.session_state.comuna_idx = random.randint(0, len(comunas) - 1)
-    if variable_aleatoria:
-        st.session_state.variable_idx = random.randint(0, len(VARIABLES) - 1)
+if not regiones_sel:
+    st.info("Selecciona al menos una region en el panel izquierdo.")
+    st.stop()
 
-    comuna_idx = min(st.session_state.comuna_idx, len(comunas) - 1)
-    comuna = st.selectbox("Comuna", comunas, index=comuna_idx)
-    variable = st.selectbox("Variable", VARIABLES, index=st.session_state.variable_idx)
+df_reg = df[df["region"].isin(regiones_sel)]
 
-# -- Mapa principal -----------------------------------------------------------
+# -- KPIs principales --------------------------------------------------------
 
-st.subheader(comuna)
-st.caption(f"{region} \u00b7 Variable: `{variable}`")
+st.header("Resumen de Poblacion")
 
-with st.spinner("Cargando manzanas..."):
-    gdf = cargar_manzanas(region, comuna, variable)
+pob_base = df_reg[df_reg["año"] == año_base].groupby("region")["poblacion"].sum()
+pob_comp = df_reg[df_reg["año"] == año_comp].groupby("region")["poblacion"].sum()
 
-gdf_json = gdf.__geo_interface__
+cols = st.columns(len(regiones_sel))
+for i, reg in enumerate(regiones_sel):
+    base = pob_base.get(reg, 0)
+    comp = pob_comp.get(reg, 0)
+    delta = comp - base
+    pct = (delta / base * 100) if base > 0 else 0
+    cols[i].metric(
+        reg,
+        f"{comp:,.0f}",
+        f"{delta:+,.0f} ({pct:+.1f}%) vs {año_base}",
+    )
 
-fig = px.choropleth_mapbox(
-    gdf,
-    geojson=gdf_json,
-    locations=gdf.index,
-    color=variable,
-    color_continuous_scale="RdPu",
-    mapbox_style="carto-darkmatter",
-    zoom=12,
-    center={
-        "lat": gdf.geometry.centroid.y.mean(),
-        "lon": gdf.geometry.centroid.x.mean(),
-    },
-    opacity=0.85,
-    hover_data={variable: True},
+# -- Grafico: Evolucion regional ----------------------------------------------
+
+st.header("Evolucion Poblacional por Region")
+
+df_reg_año = (
+    df_reg.groupby(["region", "año"])["poblacion"]
+    .sum()
+    .reset_index()
 )
 
-fig.update_layout(
-    margin={"r": 0, "t": 0, "l": 0, "b": 0},
+fig_reg = px.line(
+    df_reg_año,
+    x="año",
+    y="poblacion",
+    color="region",
+    markers=True,
+    color_discrete_sequence=px.colors.sequential.RdPu[2:],
+)
+fig_reg.update_layout(
     paper_bgcolor="#111111",
-    plot_bgcolor="#111111",
-    coloraxis_colorbar=dict(orientation="h", y=1.02, thickness=12),
-    height=700,
+    plot_bgcolor="#1a1a1a",
+    font_color="#e0e0e0",
+    legend_title_text="Region",
+    xaxis_title="Año",
+    yaxis_title="Poblacion",
+    height=450,
+    xaxis=dict(gridcolor="#333333"),
+    yaxis=dict(gridcolor="#333333"),
+)
+fig_reg.add_vline(x=2024, line_dash="dash", line_color="#cc44aa", opacity=0.5,
+                  annotation_text="Censo 2024", annotation_font_color="#cc44aa")
+st.plotly_chart(fig_reg, use_container_width=True)
+
+# -- Tabla comparativa regional -----------------------------------------------
+
+st.header(f"Comparacion Regional: {año_base} vs {año_comp}")
+
+df_tabla_reg = pd.DataFrame({
+    "Region": pob_base.index,
+    f"Poblacion {año_base}": pob_base.values,
+    f"Poblacion {año_comp}": pob_comp.values,
+})
+df_tabla_reg["Cambio"] = df_tabla_reg[f"Poblacion {año_comp}"] - df_tabla_reg[f"Poblacion {año_base}"]
+df_tabla_reg["Cambio %"] = (
+    df_tabla_reg["Cambio"] / df_tabla_reg[f"Poblacion {año_base}"] * 100
+).round(1)
+df_tabla_reg = df_tabla_reg.sort_values("Cambio %", ascending=False)
+
+st.dataframe(
+    df_tabla_reg.style.format({
+        f"Poblacion {año_base}": "{:,.0f}",
+        f"Poblacion {año_comp}": "{:,.0f}",
+        "Cambio": "{:+,.0f}",
+        "Cambio %": "{:+.1f}%",
+    }),
+    use_container_width=True,
+    hide_index=True,
 )
 
-st.plotly_chart(fig, use_container_width=True)
+# -- Seccion comunal ----------------------------------------------------------
+
+st.header("Detalle Comunal")
+
+if not comunas_sel:
+    # Mostrar top 10 comunas con mayor crecimiento en las regiones seleccionadas
+    st.caption(
+        "Selecciona comunas en el panel izquierdo para ver detalle. "
+        "Mostrando las 10 comunas con mayor crecimiento proyectado."
+    )
+    df_com_base = df_reg[df_reg["año"] == año_base][["comuna", "poblacion"]].rename(
+        columns={"poblacion": "pob_base"}
+    )
+    df_com_comp = df_reg[df_reg["año"] == año_comp][["comuna", "poblacion"]].rename(
+        columns={"poblacion": "pob_comp"}
+    )
+    df_com_top = df_com_base.merge(df_com_comp, on="comuna")
+    df_com_top["cambio_pct"] = (
+        (df_com_top["pob_comp"] - df_com_top["pob_base"]) / df_com_top["pob_base"] * 100
+    )
+    df_com_top = df_com_top.nlargest(10, "cambio_pct")
+    comunas_mostrar = df_com_top["comuna"].tolist()
+else:
+    comunas_mostrar = comunas_sel
+
+df_com = df_reg[df_reg["comuna"].isin(comunas_mostrar)]
+
+# Grafico comunal
+df_com_año = (
+    df_com.groupby(["comuna", "año"])["poblacion"]
+    .sum()
+    .reset_index()
+)
+
+fig_com = px.line(
+    df_com_año,
+    x="año",
+    y="poblacion",
+    color="comuna",
+    markers=True,
+    color_discrete_sequence=px.colors.qualitative.Set2,
+)
+fig_com.update_layout(
+    paper_bgcolor="#111111",
+    plot_bgcolor="#1a1a1a",
+    font_color="#e0e0e0",
+    legend_title_text="Comuna",
+    xaxis_title="Año",
+    yaxis_title="Poblacion",
+    height=450,
+    xaxis=dict(gridcolor="#333333"),
+    yaxis=dict(gridcolor="#333333"),
+)
+fig_com.add_vline(x=2024, line_dash="dash", line_color="#cc44aa", opacity=0.5)
+st.plotly_chart(fig_com, use_container_width=True)
+
+# Tabla comunal
+st.subheader(f"Tabla Comunal: {año_base} vs {año_comp}")
+
+df_tc_base = df_com[df_com["año"] == año_base][["region", "comuna", "poblacion"]].rename(
+    columns={"poblacion": f"Poblacion {año_base}"}
+)
+df_tc_comp = df_com[df_com["año"] == año_comp][["comuna", "poblacion"]].rename(
+    columns={"poblacion": f"Poblacion {año_comp}"}
+)
+df_tabla_com = df_tc_base.merge(df_tc_comp, on="comuna")
+df_tabla_com["Cambio"] = df_tabla_com[f"Poblacion {año_comp}"] - df_tabla_com[f"Poblacion {año_base}"]
+df_tabla_com["Cambio %"] = (
+    df_tabla_com["Cambio"] / df_tabla_com[f"Poblacion {año_base}"] * 100
+).round(1)
+df_tabla_com = df_tabla_com.rename(columns={"region": "Region", "comuna": "Comuna"})
+df_tabla_com = df_tabla_com.sort_values("Cambio %", ascending=False)
+
+st.dataframe(
+    df_tabla_com.style.format({
+        f"Poblacion {año_base}": "{:,.0f}",
+        f"Poblacion {año_comp}": "{:,.0f}",
+        "Cambio": "{:+,.0f}",
+        "Cambio %": "{:+.1f}%",
+    }),
+    use_container_width=True,
+    hide_index=True,
+)
+
+# -- Piramide poblacional -----------------------------------------------------
+
+st.header("Piramide Poblacional")
+
+try:
+    with st.spinner("Cargando datos por edad y genero..."):
+        df_pir = cargar_piramide()
+
+    col_pir1, col_pir2 = st.columns(2)
+    año_piramide = col_pir1.selectbox(
+        "Año para piramide", años, index=años.index(2024), key="pir_año"
+    )
+
+    if comunas_sel:
+        nivel_pir = col_pir2.selectbox("Nivel", ["Region", "Comuna"])
+    else:
+        nivel_pir = "Region"
+        col_pir2.info("Selecciona comunas para ver piramides comunales")
+
+    if nivel_pir == "Region" or not comunas_sel:
+        df_pir_filtro = df_pir[
+            (df_pir["region"].isin(regiones_sel)) & (df_pir["año"] == año_piramide)
+        ]
+        titulo_pir = ", ".join(regiones_sel)
+    else:
+        df_pir_filtro = df_pir[
+            (df_pir["comuna"].isin(comunas_sel)) & (df_pir["año"] == año_piramide)
+        ]
+        titulo_pir = ", ".join(comunas_sel)
+
+    if not df_pir_filtro.empty and "genero" in df_pir_filtro.columns and "edad" in df_pir_filtro.columns:
+        df_pir_agg = (
+            df_pir_filtro.groupby(["edad", "genero"])["poblacion"]
+            .sum()
+            .reset_index()
+        )
+
+        hombres = df_pir_agg[df_pir_agg["genero"].str.lower().str.contains("hombre|masculino|male")]
+        mujeres = df_pir_agg[df_pir_agg["genero"].str.lower().str.contains("mujer|femenino|female")]
+
+        fig_pir = go.Figure()
+        fig_pir.add_trace(go.Bar(
+            y=hombres["edad"],
+            x=-hombres["poblacion"],
+            orientation="h",
+            name="Hombres",
+            marker_color="#4a90d9",
+        ))
+        fig_pir.add_trace(go.Bar(
+            y=mujeres["edad"],
+            x=mujeres["poblacion"],
+            orientation="h",
+            name="Mujeres",
+            marker_color="#cc44aa",
+        ))
+        fig_pir.update_layout(
+            title=f"{titulo_pir} - {año_piramide}",
+            barmode="overlay",
+            bargap=0.1,
+            paper_bgcolor="#111111",
+            plot_bgcolor="#1a1a1a",
+            font_color="#e0e0e0",
+            xaxis=dict(
+                title="Poblacion",
+                gridcolor="#333333",
+                tickvals=[-50000, -25000, 0, 25000, 50000],
+                ticktext=["50k", "25k", "0", "25k", "50k"],
+            ),
+            yaxis=dict(title="Edad", gridcolor="#333333"),
+            height=500,
+        )
+        st.plotly_chart(fig_pir, use_container_width=True)
+    else:
+        st.warning("No hay datos de piramide disponibles para esta seleccion.")
+
+except Exception as e:
+    st.warning(f"No se pudieron cargar los datos de piramide poblacional: {e}")
+
+# -- Footer -------------------------------------------------------------------
+
+st.divider()
+st.caption(
+    "Datos: [INE Chile - Proyecciones de Poblacion]"
+    "(https://www.ine.gob.cl/estadisticas/sociales/demografia-y-vitales/"
+    "proyecciones-de-poblacion) | "
+    "Procesados por [Bastian Olea]"
+    "(https://github.com/bastianolea/censo_proyecciones_poblacion)"
+)
