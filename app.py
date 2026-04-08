@@ -127,10 +127,12 @@ with col_graf_reg:
         unsafe_allow_html=True,
     )
 
+    defaults_reg = [r for r in ["Metropolitana de Santiago", "Valparaíso", "Biobío", "Maule"]
+                     if r in regiones_todas]
     regiones_sel = st.multiselect(
         "Regiones",
         regiones_todas,
-        default=["Metropolitana de Santiago", "Valparaiso", "Biobio", "Maule"],
+        default=defaults_reg,
     )
 
 if not regiones_sel:
@@ -270,7 +272,7 @@ with col_graf_com:
         unsafe_allow_html=True,
     )
 
-    comunas_default = [c for c in ["La Pintana", "Puente Alto", "Santiago", "Vitacura", "Independencia", "La Florida"]
+    comunas_default = [c for c in ["La Pintana", "Puente Alto", "Santiago", "Vitacura", "Independencia", "La Florida", "Ñuñoa"]
                        if c in comunas_disponibles]
 
     comunas_sel = st.multiselect(
