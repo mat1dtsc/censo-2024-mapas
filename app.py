@@ -6,6 +6,8 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
+import json
+from urllib.request import urlopen
 
 # -- Colores (mismos que el original) -----------------------------------------
 
@@ -27,6 +29,14 @@ URL_PIRAMIDE = (
     "https://raw.githubusercontent.com/bastianolea/"
     "censo_proyecciones_poblacion/main/datos/datos_procesados/"
     "censo_proyecciones_a%C3%B1o_edad_genero.parquet"
+)
+URL_GEOJSON_COMUNAS = (
+    "https://raw.githubusercontent.com/fcortes/Chile-GeoJSON/master/comunas.geojson"
+)
+URL_POB_2024 = (
+    "https://raw.githubusercontent.com/bastianolea/"
+    "censo_proyecciones_poblacion/main/datos/datos_procesados/"
+    "censo_proyeccion_2024.csv"
 )
 
 # -- Configuracion de pagina --------------------------------------------------
@@ -555,6 +565,195 @@ try:
 
 except Exception as e:
     st.warning(f"No se pudieron cargar los datos de piramide poblacional: {e}")
+
+# ==============================================================================
+# SECCION 4: Mapa de densidad poblacional
+# ==============================================================================
+
+st.divider()
+
+st.header("Densidad poblacional por comuna")
+st.markdown(
+    "Mapa interactivo que muestra la distribucion de la poblacion a nivel comunal "
+    "en Chile. Util para evaluar donde se concentra la poblacion y detectar zonas "
+    "con mayor potencial de demanda para la ubicacion de negocios, servicios o "
+    "proyectos de inversion."
+)
+st.markdown(
+    '<p class="explicacion">Selecciona una region para hacer zoom en el mapa, '
+    "o deja \"Todas\" para ver el pais completo. Puedes elegir entre poblacion "
+    "total o densidad por km2.</p>",
+    unsafe_allow_html=True,
+)
+
+
+@st.cache_data(ttl=3600)
+def cargar_geojson():
+    with urlopen(URL_GEOJSON_COMUNAS) as response:
+        return json.loads(response.read().decode())
+
+
+@st.cache_data(ttl=3600)
+def cargar_pob_2024():
+    dp = pd.read_csv(URL_POB_2024, sep=";", index_col=0)
+    dp.columns = [
+        "cut_region", "region", "cut_provincia", "provincia",
+        "cut_comuna", "comuna", "poblacion",
+    ]
+    return dp
+
+
+try:
+    with st.spinner("Cargando mapa de comunas..."):
+        geojson_comunas = cargar_geojson()
+        df_pob24 = cargar_pob_2024()
+
+    # Calcular area en km2 desde el geojson (st_area_sh esta en m2)
+    areas = {}
+    for feature in geojson_comunas["features"]:
+        cod = feature["properties"]["cod_comuna"]
+        area_m2 = feature["properties"].get("st_area_sh", 0)
+        areas[cod] = area_m2 / 1_000_000  # m2 a km2
+
+    df_pob24["area_km2"] = df_pob24["cut_comuna"].map(areas)
+    df_pob24["densidad"] = (
+        df_pob24["poblacion"] / df_pob24["area_km2"].replace(0, np.nan)
+    ).round(1)
+
+    # Controles del mapa
+    col_mapa1, col_mapa2 = st.columns([3, 3])
+
+    with col_mapa1:
+        region_mapa = st.selectbox(
+            "Region (zoom)",
+            ["Todas"] + sorted(df_pob24["region"].unique()),
+            index=0,
+            key="mapa_region",
+        )
+
+    with col_mapa2:
+        variable_mapa = st.selectbox(
+            "Variable",
+            ["Poblacion total", "Densidad (hab/km2)"],
+            key="mapa_variable",
+        )
+
+    # Filtrar datos
+    if region_mapa == "Todas":
+        df_mapa = df_pob24.copy()
+    else:
+        df_mapa = df_pob24[df_pob24["region"] == region_mapa].copy()
+
+    col_var = "poblacion" if variable_mapa == "Poblacion total" else "densidad"
+    color_label = "Poblacion" if col_var == "poblacion" else "Hab/km2"
+
+    # Crear mapa choropleth
+    fig_mapa = px.choropleth_mapbox(
+        df_mapa,
+        geojson=geojson_comunas,
+        locations="cut_comuna",
+        featureidkey="properties.cod_comuna",
+        color=col_var,
+        color_continuous_scale=[
+            [0, "#f7f7f7"],
+            [0.2, "#d1e5f0"],
+            [0.4, "#92c5de"],
+            [0.6, "#4393c3"],
+            [0.8, "#2166ac"],
+            [1, "#053061"],
+        ],
+        mapbox_style="carto-positron",
+        hover_name="comuna",
+        hover_data={
+            "poblacion": ":,.0f",
+            "densidad": ":,.1f",
+            "region": True,
+            "cut_comuna": False,
+            col_var: False,
+        },
+        labels={
+            "poblacion": "Poblacion",
+            "densidad": "Densidad (hab/km2)",
+            "region": "Region",
+        },
+        opacity=0.7,
+    )
+
+    # Zoom segun region o pais
+    if region_mapa == "Todas":
+        center = {"lat": -35.5, "lon": -71.5}
+        zoom = 3.5
+    else:
+        # Calcular centro desde los datos filtrados del geojson
+        lats, lons = [], []
+        codigos_region = set(df_mapa["cut_comuna"].tolist())
+        for feature in geojson_comunas["features"]:
+            if feature["properties"]["cod_comuna"] in codigos_region:
+                coords = feature["geometry"]["coordinates"]
+                # Extraer coordenadas planas
+                def extraer_coords(c):
+                    if isinstance(c[0], (int, float)):
+                        lons.append(c[0])
+                        lats.append(c[1])
+                    else:
+                        for sub in c:
+                            extraer_coords(sub)
+                extraer_coords(coords)
+        if lats and lons:
+            center = {"lat": np.mean(lats), "lon": np.mean(lons)}
+            lat_range = max(lats) - min(lats)
+            zoom = max(4, min(10, 8 - lat_range * 1.5))
+        else:
+            center = {"lat": -35.5, "lon": -71.5}
+            zoom = 3.5
+
+    fig_mapa.update_layout(
+        mapbox=dict(center=center, zoom=zoom),
+        paper_bgcolor=COLOR_FONDO,
+        font_color=COLOR_PRINCIPAL,
+        coloraxis_colorbar=dict(
+            title=color_label,
+            title_font_color=COLOR_DESTACADO,
+            thickness=15,
+            len=0.6,
+        ),
+        margin={"r": 0, "t": 0, "l": 0, "b": 0},
+        height=600,
+    )
+
+    st.plotly_chart(fig_mapa, use_container_width=True)
+
+    # Tabla ranking
+    st.subheader("Ranking de comunas por " + variable_mapa.lower())
+    st.markdown(
+        '<p class="explicacion">Las comunas con mayor concentracion de poblacion '
+        "representan zonas con alta demanda potencial para servicios, comercio y "
+        "proyectos de inversion.</p>",
+        unsafe_allow_html=True,
+    )
+
+    df_ranking = df_mapa[["region", "comuna", "poblacion", "area_km2", "densidad"]].copy()
+    df_ranking = df_ranking.sort_values(col_var, ascending=False).head(20)
+    df_ranking = df_ranking.rename(columns={
+        "region": "Region",
+        "comuna": "Comuna",
+        "poblacion": "Poblacion",
+        "area_km2": "Area (km2)",
+        "densidad": "Densidad (hab/km2)",
+    })
+
+    st.dataframe(
+        df_ranking.style.format({
+            "Poblacion": "{:,.0f}",
+            "Area (km2)": "{:,.1f}",
+            "Densidad (hab/km2)": "{:,.1f}",
+        }),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+except Exception as e:
+    st.warning(f"No se pudo cargar el mapa de densidad: {e}")
 
 # -- Footer --------------------------------------------------------------------
 
