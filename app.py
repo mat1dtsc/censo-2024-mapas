@@ -647,6 +647,18 @@ try:
     col_var = "poblacion" if variable_mapa == "Poblacion total" else "densidad"
     color_label = "Poblacion" if col_var == "poblacion" else "Hab/km2"
 
+    # Paleta purpura/magenta estilo Olea (RdPu)
+    RDPU_SCALE = [
+        [0, "#feebe2"],
+        [0.15, "#fcc5c0"],
+        [0.3, "#fa9fb5"],
+        [0.45, "#f768a1"],
+        [0.6, "#dd3497"],
+        [0.75, "#ae017e"],
+        [0.9, "#7a0177"],
+        [1, "#49006a"],
+    ]
+
     # Crear mapa choropleth
     fig_mapa = px.choropleth_mapbox(
         df_mapa,
@@ -654,14 +666,7 @@ try:
         locations="cut_comuna",
         featureidkey="properties.cod_comuna",
         color=col_var,
-        color_continuous_scale=[
-            [0, "#f7f7f7"],
-            [0.2, "#d1e5f0"],
-            [0.4, "#92c5de"],
-            [0.6, "#4393c3"],
-            [0.8, "#2166ac"],
-            [1, "#053061"],
-        ],
+        color_continuous_scale=RDPU_SCALE,
         mapbox_style="carto-positron",
         hover_name="comuna",
         hover_data={
@@ -676,7 +681,13 @@ try:
             "densidad": "Densidad (hab/km2)",
             "region": "Region",
         },
-        opacity=0.7,
+        opacity=0.85,
+    )
+
+    # Bordes de comunas visibles
+    fig_mapa.update_traces(
+        marker_line_width=0.5,
+        marker_line_color="#888888",
     )
 
     # Zoom segun region o pais
@@ -684,13 +695,11 @@ try:
         center = {"lat": -35.5, "lon": -71.5}
         zoom = 3.5
     else:
-        # Calcular centro desde los datos filtrados del geojson
         lats, lons = [], []
         codigos_region = set(df_mapa["cut_comuna"].tolist())
         for feature in geojson_comunas["features"]:
             if feature["properties"]["cod_comuna"] in codigos_region:
                 coords = feature["geometry"]["coordinates"]
-                # Extraer coordenadas planas
                 def extraer_coords(c):
                     if isinstance(c[0], (int, float)):
                         lons.append(c[0])
@@ -712,16 +721,21 @@ try:
         paper_bgcolor=COLOR_FONDO,
         font_color=COLOR_PRINCIPAL,
         coloraxis_colorbar=dict(
-            title=color_label,
-            title_font_color=COLOR_DESTACADO,
-            thickness=15,
-            len=0.6,
+            title=dict(text=color_label, font=dict(color=COLOR_PRINCIPAL)),
+            thickness=18,
+            len=0.5,
+            bgcolor="rgba(255,255,255,0.8)",
+            borderwidth=0,
+            tickfont=dict(color=COLOR_PRINCIPAL),
+            x=0.98,
         ),
         margin={"r": 0, "t": 0, "l": 0, "b": 0},
-        height=600,
+        height=650,
     )
 
     st.plotly_chart(fig_mapa, use_container_width=True)
+
+    st.caption("Fuente: Censo 2024, INE")
 
     # Tabla ranking
     st.subheader("Ranking de comunas por " + variable_mapa.lower())
