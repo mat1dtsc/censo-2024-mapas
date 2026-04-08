@@ -30,8 +30,8 @@ URL_PIRAMIDE = (
     "censo_proyecciones_poblacion/main/datos/datos_procesados/"
     "censo_proyecciones_a%C3%B1o_edad_genero.parquet"
 )
-URL_GEOJSON_COMUNAS = (
-    "https://raw.githubusercontent.com/fcortes/Chile-GeoJSON/master/comunas.geojson"
+URL_GEOJSON_BASE = (
+    "https://raw.githubusercontent.com/caracena/chile-geojson/master/"
 )
 URL_POB_2024 = (
     "https://raw.githubusercontent.com/bastianolea/"
@@ -589,8 +589,13 @@ st.markdown(
 
 @st.cache_data(ttl=3600)
 def cargar_geojson():
-    with urlopen(URL_GEOJSON_COMUNAS) as response:
-        return json.loads(response.read().decode())
+    all_features = []
+    for i in range(1, 17):
+        url = f"{URL_GEOJSON_BASE}{i}.geojson"
+        with urlopen(url) as response:
+            data = json.loads(response.read().decode())
+            all_features.extend(data["features"])
+    return {"type": "FeatureCollection", "features": all_features}
 
 
 @st.cache_data(ttl=3600)
