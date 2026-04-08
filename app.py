@@ -737,7 +737,166 @@ try:
 
     st.caption("Fuente: Censo 2024, INE")
 
-    # Tabla ranking
+    # -- Graficos analiticos lado a lado -----------------------------------------
+
+    col_bar, col_treemap = st.columns(2)
+
+    # Barras horizontales: Top 15 comunas
+    with col_bar:
+        st.subheader("Top 15 comunas")
+
+        df_top15 = df_mapa.nlargest(15, col_var).sort_values(col_var, ascending=True)
+
+        fig_bar = go.Figure(go.Bar(
+            y=df_top15["comuna"],
+            x=df_top15[col_var],
+            orientation="h",
+            marker_color=[
+                f"rgba({int(174 * (1 - i/14))}, {int(1 + 125 * (i/14))}, {int(126 + 52 * (i/14))}, 0.85)"
+                for i in range(15)
+            ],
+            text=df_top15[col_var].apply(lambda x: f"{x:,.0f}"),
+            textposition="outside",
+            textfont=dict(size=10, color=COLOR_PRINCIPAL),
+        ))
+        fig_bar.update_layout(
+            paper_bgcolor=COLOR_FONDO,
+            plot_bgcolor=COLOR_FONDO,
+            font_color=COLOR_PRINCIPAL,
+            xaxis=dict(title=color_label, title_font_color=COLOR_DESTACADO, gridcolor="#e8eaed"),
+            yaxis=dict(title=""),
+            height=500,
+            margin=dict(l=10, r=60, t=10, b=40),
+        )
+        st.plotly_chart(fig_bar, use_container_width=True)
+
+    # Treemap: proporcion visual de poblacion
+    with col_treemap:
+        st.subheader("Proporcion por comuna")
+
+        df_tree = df_mapa.nlargest(25, "poblacion").copy()
+        df_tree["pob_texto"] = df_tree["poblacion"].apply(lambda x: f"{x:,.0f}")
+
+        fig_tree = px.treemap(
+            df_tree,
+            path=["region", "comuna"],
+            values="poblacion",
+            color="densidad",
+            color_continuous_scale="RdPu",
+            hover_data={"poblacion": ":,.0f", "densidad": ":,.1f"},
+            labels={"poblacion": "Poblacion", "densidad": "Densidad"},
+        )
+        fig_tree.update_layout(
+            paper_bgcolor=COLOR_FONDO,
+            font_color=COLOR_PRINCIPAL,
+            coloraxis_colorbar=dict(
+                title="Densidad",
+                title_font_color=COLOR_DESTACADO,
+                thickness=12,
+                len=0.4,
+            ),
+            height=500,
+            margin=dict(l=0, r=0, t=10, b=10),
+        )
+        fig_tree.update_traces(
+            textinfo="label+value",
+            textfont=dict(size=11),
+        )
+        st.plotly_chart(fig_tree, use_container_width=True)
+
+    # -- Distribucion de poblacion regional (donut) + scatter densidad vs pob ---
+
+    col_donut, col_scatter = st.columns(2)
+
+    with col_donut:
+        st.subheader("Distribucion regional")
+
+        df_reg_pob = df_pob24.groupby("region")["poblacion"].sum().reset_index()
+        df_reg_pob = df_reg_pob.sort_values("poblacion", ascending=False)
+
+        fig_donut = go.Figure(go.Pie(
+            labels=df_reg_pob["region"],
+            values=df_reg_pob["poblacion"],
+            hole=0.45,
+            marker=dict(
+                colors=px.colors.sequential.RdPu[::-1][:len(df_reg_pob)],
+                line=dict(color=COLOR_FONDO, width=2),
+            ),
+            textinfo="label+percent",
+            textposition="outside",
+            textfont=dict(size=9, color=COLOR_PRINCIPAL),
+            hovertemplate="%{label}<br>Poblacion: %{value:,.0f}<br>%{percent}<extra></extra>",
+        ))
+        fig_donut.update_layout(
+            paper_bgcolor=COLOR_FONDO,
+            font_color=COLOR_PRINCIPAL,
+            showlegend=False,
+            height=500,
+            margin=dict(l=20, r=20, t=10, b=10),
+        )
+        st.plotly_chart(fig_donut, use_container_width=True)
+
+    with col_scatter:
+        st.subheader("Densidad vs Poblacion")
+        st.markdown(
+            '<p class="explicacion">Comunas en el cuadrante superior derecho '
+            "tienen alta poblacion y alta densidad: zonas ideales para negocios "
+            "de alto volumen.</p>",
+            unsafe_allow_html=True,
+        )
+
+        df_scatter = df_mapa.dropna(subset=["densidad"]).copy()
+        df_scatter["log_densidad"] = np.log10(df_scatter["densidad"].clip(lower=1))
+
+        fig_scatter = px.scatter(
+            df_scatter,
+            x="poblacion",
+            y="densidad",
+            size="poblacion",
+            color="densidad",
+            color_continuous_scale="RdPu",
+            hover_name="comuna",
+            hover_data={
+                "poblacion": ":,.0f",
+                "densidad": ":,.1f",
+                "region": True,
+                "log_densidad": False,
+            },
+            labels={
+                "poblacion": "Poblacion",
+                "densidad": "Densidad (hab/km2)",
+                "region": "Region",
+            },
+            size_max=40,
+        )
+        fig_scatter.update_layout(
+            paper_bgcolor=COLOR_FONDO,
+            plot_bgcolor=COLOR_FONDO,
+            font_color=COLOR_PRINCIPAL,
+            xaxis=dict(
+                title="Poblacion",
+                title_font_color=COLOR_DESTACADO,
+                gridcolor="#e8eaed",
+                type="log",
+            ),
+            yaxis=dict(
+                title="Densidad (hab/km2)",
+                title_font_color=COLOR_DESTACADO,
+                gridcolor="#e8eaed",
+                type="log",
+            ),
+            coloraxis_colorbar=dict(
+                title="Densidad",
+                thickness=12,
+                len=0.4,
+            ),
+            height=500,
+            margin=dict(l=10, r=10, t=10, b=40),
+        )
+        st.plotly_chart(fig_scatter, use_container_width=True)
+
+    # -- Tabla ranking ------------------------------------------------------------
+
     st.subheader("Ranking de comunas por " + variable_mapa.lower())
     st.markdown(
         '<p class="explicacion">Las comunas con mayor concentracion de poblacion '
