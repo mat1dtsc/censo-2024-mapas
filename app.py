@@ -647,15 +647,16 @@ try:
     col_var = "poblacion" if variable_mapa == "Poblacion total" else "densidad"
     color_label = "Poblacion" if col_var == "poblacion" else "Hab/km2"
 
-    # Paleta purpura/magenta estilo Olea (RdPu)
-    RDPU_SCALE = [
-        [0, "#feebe2"],
-        [0.15, "#fcc5c0"],
-        [0.3, "#fa9fb5"],
-        [0.45, "#f768a1"],
-        [0.6, "#dd3497"],
-        [0.75, "#ae017e"],
-        [0.9, "#7a0177"],
+    # Paleta suave naranja-rosa-purpura (como mapa de poblacion ocupada de Olea)
+    MAPA_SCALE = [
+        [0, "#fef0d9"],
+        [0.12, "#fdd49e"],
+        [0.25, "#fdbb84"],
+        [0.38, "#fc8d59"],
+        [0.5, "#ef6548"],
+        [0.62, "#d7301f"],
+        [0.75, "#b30000"],
+        [0.88, "#7f0000"],
         [1, "#49006a"],
     ]
 
@@ -666,7 +667,7 @@ try:
         locations="cut_comuna",
         featureidkey="properties.cod_comuna",
         color=col_var,
-        color_continuous_scale=RDPU_SCALE,
+        color_continuous_scale=MAPA_SCALE,
         mapbox_style="carto-positron",
         hover_name="comuna",
         hover_data={
@@ -681,13 +682,13 @@ try:
             "densidad": "Densidad (hab/km2)",
             "region": "Region",
         },
-        opacity=0.85,
+        opacity=0.9,
     )
 
-    # Bordes de comunas visibles
+    # Bordes finos para cerrar los gaps
     fig_mapa.update_traces(
-        marker_line_width=0.5,
-        marker_line_color="#888888",
+        marker_line_width=1,
+        marker_line_color="rgba(100,100,100,0.3)",
     )
 
     # Zoom segun region o pais
@@ -721,13 +722,12 @@ try:
         paper_bgcolor=COLOR_FONDO,
         font_color=COLOR_PRINCIPAL,
         coloraxis_colorbar=dict(
-            title=dict(text=color_label, font=dict(color=COLOR_PRINCIPAL)),
-            thickness=18,
+            title=dict(text=color_label, font=dict(color=COLOR_PRINCIPAL, size=12)),
+            thickness=15,
             len=0.5,
-            bgcolor="rgba(255,255,255,0.8)",
-            borderwidth=0,
-            tickfont=dict(color=COLOR_PRINCIPAL),
+            tickfont=dict(color=COLOR_PRINCIPAL, size=10),
             x=0.98,
+            outlinewidth=0,
         ),
         margin={"r": 0, "t": 0, "l": 0, "b": 0},
         height=650,
