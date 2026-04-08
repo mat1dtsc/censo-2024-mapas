@@ -31,12 +31,13 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-        .stApp { background-color: #111111; color: #e0e0e0; }
-        [data-testid="stSidebar"] { background-color: #1a1a1a; }
-        h1 { color: #cc44aa !important; }
-        h2, h3 { color: #e0e0e0; }
-        .stMetric label { color: #aaaaaa !important; }
-        .stMetric [data-testid="stMetricValue"] { color: #e0e0e0 !important; }
+        .stApp { background-color: #ffffff; color: #1a1a1a; }
+        [data-testid="stSidebar"] { background-color: #f8f9fa; border-right: 1px solid #e0e0e0; }
+        h1 { color: #1a73e8 !important; }
+        h2 { color: #202124 !important; }
+        h3 { color: #3c4043 !important; }
+        .stMetric label { color: #5f6368 !important; }
+        .stMetric [data-testid="stMetricValue"] { color: #202124 !important; }
         .stMetric [data-testid="stMetricDelta"] { font-size: 0.9rem !important; }
     </style>
     """,
@@ -145,21 +146,21 @@ fig_reg = px.line(
     y="poblacion",
     color="region",
     markers=True,
-    color_discrete_sequence=px.colors.sequential.RdPu[2:],
+    color_discrete_sequence=["#1a73e8", "#ea4335", "#34a853", "#fbbc04", "#4285f4", "#ff6d01"],
 )
 fig_reg.update_layout(
-    paper_bgcolor="#111111",
-    plot_bgcolor="#1a1a1a",
-    font_color="#e0e0e0",
+    paper_bgcolor="#ffffff",
+    plot_bgcolor="#ffffff",
+    font_color="#202124",
     legend_title_text="Region",
     xaxis_title="Año",
     yaxis_title="Poblacion",
     height=450,
-    xaxis=dict(gridcolor="#333333"),
-    yaxis=dict(gridcolor="#333333"),
+    xaxis=dict(gridcolor="#e8eaed"),
+    yaxis=dict(gridcolor="#e8eaed"),
 )
-fig_reg.add_vline(x=2024, line_dash="dash", line_color="#cc44aa", opacity=0.5,
-                  annotation_text="Censo 2024", annotation_font_color="#cc44aa")
+fig_reg.add_vline(x=2024, line_dash="dash", line_color="#1a73e8", opacity=0.5,
+                  annotation_text="Censo 2024", annotation_font_color="#1a73e8")
 st.plotly_chart(fig_reg, use_container_width=True)
 
 # -- Tabla comparativa regional -----------------------------------------------
@@ -231,17 +232,17 @@ fig_com = px.line(
     color_discrete_sequence=px.colors.qualitative.Set2,
 )
 fig_com.update_layout(
-    paper_bgcolor="#111111",
-    plot_bgcolor="#1a1a1a",
-    font_color="#e0e0e0",
+    paper_bgcolor="#ffffff",
+    plot_bgcolor="#ffffff",
+    font_color="#202124",
     legend_title_text="Comuna",
     xaxis_title="Año",
     yaxis_title="Poblacion",
     height=450,
-    xaxis=dict(gridcolor="#333333"),
-    yaxis=dict(gridcolor="#333333"),
+    xaxis=dict(gridcolor="#e8eaed"),
+    yaxis=dict(gridcolor="#e8eaed"),
 )
-fig_com.add_vline(x=2024, line_dash="dash", line_color="#cc44aa", opacity=0.5)
+fig_com.add_vline(x=2024, line_dash="dash", line_color="#1a73e8", opacity=0.5)
 st.plotly_chart(fig_com, use_container_width=True)
 
 # Tabla comunal
@@ -318,29 +319,29 @@ try:
             x=-hombres["poblacion"],
             orientation="h",
             name="Hombres",
-            marker_color="#4a90d9",
+            marker_color="#4285f4",
         ))
         fig_pir.add_trace(go.Bar(
             y=mujeres["edad"],
             x=mujeres["poblacion"],
             orientation="h",
             name="Mujeres",
-            marker_color="#cc44aa",
+            marker_color="#ea4335",
         ))
         fig_pir.update_layout(
             title=f"{titulo_pir} - {año_piramide}",
             barmode="overlay",
             bargap=0.1,
-            paper_bgcolor="#111111",
-            plot_bgcolor="#1a1a1a",
-            font_color="#e0e0e0",
+            paper_bgcolor="#ffffff",
+            plot_bgcolor="#ffffff",
+            font_color="#202124",
             xaxis=dict(
                 title="Poblacion",
-                gridcolor="#333333",
+                gridcolor="#e8eaed",
                 tickvals=[-50000, -25000, 0, 25000, 50000],
                 ticktext=["50k", "25k", "0", "25k", "50k"],
             ),
-            yaxis=dict(title="Edad", gridcolor="#333333"),
+            yaxis=dict(title="Edad", gridcolor="#e8eaed"),
             height=500,
         )
         st.plotly_chart(fig_pir, use_container_width=True)
